@@ -6,14 +6,9 @@ from skimage.color import rgb2gray
 import scipy.linalg
 from scipy.interpolate import RectBivariateSpline
 from skimage.draw import circle_perimeter
-from skimage.filters import gaussian_filter, sobel, scharr
+from skimage.filters import gaussian_filter, sobel
 from skimage import data
 import warnings
-
-def _zero_outside_range(f, maxx, maxy):
-    def func(x, y, **kwargs):
-        return f(x, y, **kwargs)*np.logical_and(x<=maxx, y<=maxy)
-    return func
 
 def active_contour_model(image, snake, alpha=0.01, beta=0.1,
                          w_line=0, w_edge=1, gamma=0.01,
@@ -109,7 +104,6 @@ def active_contour_model(image, snake, alpha=0.01, beta=0.1,
 
     intp = RectBivariateSpline(np.arange(img.shape[1]),
             np.arange(img.shape[0]), img.T, kx=2, ky=2, s=0)
-    intp = _zero_outside_range(intp, img.shape[1], img.shape[0])
 
     x, y = snake[:, 0].copy(), snake[:, 1].copy()
     xsave = np.empty((convergence_order,len(x)))
@@ -170,8 +164,16 @@ def active_contour_model(image, snake, alpha=0.01, beta=0.1,
             fy[-1] *= 2
         xn = np.dot(inv, gamma*x + fx)
         yn = np.dot(inv, gamma*y + fy)
-        x[:] += max_px_move*np.tanh(xn-x)
-        y[:] += max_px_move*np.tanh(yn-y)
+        dx = max_px_move*np.tanh(xn-x)
+        dy = max_px_move*np.tanh(yn-y)
+        if sfixed:
+            dx[0] = 0
+            dy[0] = 0
+        if efixed:
+            dx[-1] = 0
+            dy[-1] = 0
+        x[:] += dx
+        y[:] += dy
 
         # Convergence criteria:
         j = i%(convergence_order+1)
