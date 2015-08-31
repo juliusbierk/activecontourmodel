@@ -12,14 +12,13 @@ import warnings
 
 def _zero_outside_range(f, maxx, maxy):
     def func(x, y, **kwargs):
-        return f(x, y, **kwargs)*\
-            np.logical_and(x<=maxx, y<=maxy)
+        return f(x, y, **kwargs)*np.logical_and(x<=maxx, y<=maxy)
     return func
 
 def active_contour_model(image, snake, alpha=0.01, beta=0.1,
                          w_line=0, w_edge=1, gamma=0.01,
-                         bc='periodic', max_iterations=2500,
-                         convergence=0.25):
+                         bc='periodic', max_px_move=1.0,
+                         max_iterations=2500, convergence=0.1):
     """Active contour model
 
     Active contours by fitting snakes to features of images. Supports single
@@ -50,6 +49,8 @@ def active_contour_model(image, snake, alpha=0.01, beta=0.1,
          movement of the ends. 'fixed' and 'free' can be combined by parsing
          'fixed-free', 'free-fixed'. Parsing 'fixed-fixed' or 'free-free'
          yields same behaviour as 'fixed' and 'free', respectively.
+    max_px_move: float, optional
+        Maximum pixel distance to move per iteration.
     max_iterations: int, optional
         Maximum iterations to optimize snake shape.
     convergence: float, optional
@@ -66,8 +67,23 @@ def active_contour_model(image, snake, alpha=0.01, beta=0.1,
 
     Examples
     --------
+    >>> #from skimage.segmentation import active_contour_model
+    >>> from skimage.draw import circle_perimeter
+    >>> img = np.zeros((100, 100))
+    >>> rr, cc = circle_perimeter(35, 45, 25)
+    >>> img[rr, cc] = 1
+    >>> img = gaussian_filter(img,2)
+    >>> s = np.linspace(0,2*np.pi,100)
+    >>> init = 50*np.array([np.cos(s),np.sin(s)]).T+50
+    >>> snake = active_contour_model(img, init, w_edge=0, w_line=1)
+    >>> int(np.mean(np.sqrt((45-snake[:,0])**2 + (35-snake[:,1])**2)))
+    25
 
     """
+
+    max_iterations = int(max_iterations)
+    if max_iterations<=0:
+        raise ValueError("max_iterations should be >0.")
     convergence_order = 10
     valid_bcs = ['periodic', 'free', 'fixed', 'free-fixed',
                  'fixed-free', 'fixed-fixed', 'free-free']
@@ -154,8 +170,8 @@ def active_contour_model(image, snake, alpha=0.01, beta=0.1,
             fy[-1] *= 2
         xn = np.dot(inv, gamma*x + fx)
         yn = np.dot(inv, gamma*y + fy)
-        x[:] += np.tanh(xn-x)
-        y[:] += np.tanh(yn-y)
+        x[:] += max_px_move*np.tanh(xn-x)
+        y[:] += max_px_move*np.tanh(yn-y)
 
         # Convergence criteria:
         j = i%(convergence_order+1)
@@ -205,3 +221,7 @@ if __name__ == '__main__':
     plt.plot(snake[:,0],snake[:,1],'-b')
     plt.axis([0, img.shape[1], img.shape[0], 0])
     plt.show()
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
